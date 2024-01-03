@@ -3,12 +3,10 @@ import random
 import argparse
 import numpy as np
 
-
 from tqdm import tqdm
-from utils import load_wav, _preemphasize, melspectrogram, spectrogram, F0Extractor,reform_input_audio
+from utils import load_wav, _preemphasize, melspectrogram, spectrogram, F0Extractor, reform_input_audio
 from models.wenet.bin.recognize import AsrReco
 from config import Hparams
-
 
 hps = Hparams
 
@@ -41,7 +39,7 @@ def main():
         raise FileNotFoundError('Directory {} not found!'.format(args.data_dir))
     if not os.path.isdir(args.save_dir):
         os.makedirs(args.save_dir)
-    
+
     mel_dir = os.path.join(args.save_dir, 'mels')
     os.makedirs(mel_dir, exist_ok=True)
     linear_dir = os.path.join(args.save_dir, 'linears')
@@ -54,12 +52,13 @@ def main():
         if os.path.isfile(os.path.join(args.save_dir, "{}_meta.csv".format(mode))):
             os.remove(os.path.join(args.save_dir, "{}_meta.csv".format(mode)))
     wav_files = []
-    
+
     for rootdir, subdir, files in os.walk(args.data_dir):
         for f in files:
             if f.endswith('.wav'):
                 wav_files.append(os.path.join(rootdir, f))
-    
+
+    random.seed(42)
     random.shuffle(wav_files)
 
     print('Set up BNFs extraction network')
@@ -68,18 +67,17 @@ def main():
     asr_checkpoint_path = './pretrained_model/asr_model/final.pt'
 
     print('Loading BNFs extractor from {}'.format(bnf_config))
-    bnf_extractor = AsrReco(bnf_config, asr_checkpoint_path,args.use_cuda)
-
+    bnf_extractor = AsrReco(bnf_config, asr_checkpoint_path, args.use_cuda)
 
     print('Extracting mel-spectrograms, spectrograms and f0s...')
-    pitch_ext = F0Extractor("praat",sample_rate=16000)
+    pitch_ext = F0Extractor("praat", sample_rate=16000)
     train_set = []
     dev_set = []
     test_set = []
     dev_start_idx = int(len(wav_files) * (1 - args.dev_rate - args.test_rate))
     test_stat_idx = int(len(wav_files) * (1 - args.test_rate))
 
-    error=[]
+    error = []
     for i, wav_f in tqdm(enumerate(wav_files)):
         speaker = wav_f.split('/')[-2]
         # print(speaker)
@@ -112,41 +110,47 @@ def main():
         # extract f0s with vuv
         f0_fn = os.path.join(f0_dir, '{}.npy'.format(fid))
         try:
-            f0 = pitch_ext.extract_f0_by_frame(wav_arr,True)
+            f0 = pitch_ext.extract_f0_by_frame(wav_arr, True)
         except AssertionError as e:
             print(wav_f)
             error.append(wav_f)
             continue
-        
+
         # extract ppgs
-        
-        reform_input_audio(wav_f,fid+'-temp.wav')
-        BNFs, feat_lengths, PPGs = bnf_extractor.recognize(fid+'-temp.wav')
+
+        reform_input_audio(wav_f, fid + '-temp.wav')
+        BNFs, feat_lengths, PPGs = bnf_extractor.recognize(fid + '-temp.wav')
 
         BNFs_fn = os.path.join(bnf_dir, '{}.npy'.format(fid))
-        
+
         # save features to respective directory
         mel_spec, linear_spec, f0, BNFs = length_validate((mel_spec, linear_spec, f0, BNFs))
         np.save(mel_fn, mel_spec)
         np.save(linear_fn, linear_spec)
         np.save(f0_fn, f0)
         np.save(BNFs_fn, BNFs)
-        
+
         # write to csv
         if i < dev_start_idx:
             train_set.append(fid)
-            with open(os.path.join(args.save_dir, 'train_meta.csv'),
-                      'a', encoding='utf-8') as train_f:
+            with open(
+                os.path.join(args.save_dir, 'train_meta.csv'),
+                'a', encoding='utf-8'
+            ) as train_f:
                 train_f.write('{}|BNFs/{}.npy|mels/{}.npy|linears/{}.npy|f0s/{}.npy\n'.format(fid, fid, fid, fid, fid))
         elif i < test_stat_idx:
             dev_set.append(fid)
-            with open(os.path.join(args.save_dir, 'dev_meta.csv'),
-                      'a', encoding='utf-8') as dev_f:
+            with open(
+                os.path.join(args.save_dir, 'dev_meta.csv'),
+                'a', encoding='utf-8'
+            ) as dev_f:
                 dev_f.write('{}|BNFs/{}.npy|mels/{}.npy|linears/{}.npy|f0s/{}.npy\n'.format(fid, fid, fid, fid, fid))
         else:
             test_set.append(fid)
-            with open(os.path.join(args.save_dir, 'test_meta.csv'),
-                      'a', encoding='utf-8') as test_f:
+            with open(
+                os.path.join(args.save_dir, 'test_meta.csv'),
+                'a', encoding='utf-8'
+            ) as test_f:
                 test_f.write('{}|BNFs/{}.npy|mels/{}.npy|linears/{}.npy|f0s/{}.npy\n'.format(fid, fid, fid, fid, fid))
     print('Done extracting features!')
     print(error)

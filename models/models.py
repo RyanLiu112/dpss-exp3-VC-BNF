@@ -1,11 +1,14 @@
 import torch
 import torch.nn as nn
 import numpy as np
+import torch.nn.functional as F
+
 
 class BLSTMConversionModel(nn.Module):
     """
     Conversion model based on BLSTM
     """
+
     def __init__(self, in_channels, out_channels, lstm_hidden):
         """
         :param in_channels: input feature dimension,
@@ -17,14 +20,20 @@ class BLSTMConversionModel(nn.Module):
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.lstm_hidden = lstm_hidden
-        self.blstm1 = nn.LSTM(input_size=in_channels,
-                              hidden_size=lstm_hidden,
-                              bidirectional=True)
-        self.blstm2 = nn.LSTM(input_size=lstm_hidden * 2,
-                              hidden_size=lstm_hidden,
-                              bidirectional=True)
-        self.out_projection = nn.Linear(in_features=2 * lstm_hidden,
-                                        out_features=out_channels)
+        self.blstm1 = nn.LSTM(
+            input_size=in_channels,
+            hidden_size=lstm_hidden,
+            bidirectional=True
+        )
+        self.blstm2 = nn.LSTM(
+            input_size=lstm_hidden * 2,
+            hidden_size=lstm_hidden,
+            bidirectional=True
+        )
+        self.out_projection = nn.Linear(
+            in_features=2 * lstm_hidden,
+            out_features=out_channels
+        )
 
     def forward(self, x):
         """
@@ -45,27 +54,34 @@ class BLSTMResConversionModel(nn.Module):
     Conversion model based on BLSTM with ResidualNet, you need to
     define your ResidualNet Module to be used in this Module.
     """
-    def __init__(self, in_channels, out_channels, lstm_hidden, other_params):
+
+    def __init__(self, in_channels, out_channels, lstm_hidden, hidden_dim):
         """
         :param in_channels: input feature dimension,
                             usually (bnf_dim + f0s_dim) when use bnfs and f0s as inputs
-        :param out_channels: mel dimension or your acoustic feature dimnesion
+        :param out_channels: mel dimension or your acoustic feature dimension
         :param lstm_hidden: parameter dimension
-        :param other_params: other parameters you need to define resnet
+        :param hidden_dim: other parameters you need to define resnet
         """
         super(BLSTMResConversionModel, self).__init__()
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.lstm_hidden = lstm_hidden
-        self.blstm1 = nn.LSTM(input_size=in_channels,
-                              hidden_size=lstm_hidden,
-                              bidirectional=True)
-        self.blstm2 = nn.LSTM(input_size=lstm_hidden * 2,
-                              hidden_size=lstm_hidden,
-                              bidirectional=True)
-        self.out_projection = nn.Linear(in_features=2 * lstm_hidden,
-                                        out_features=out_channels)
-        self.resnet = ResidualNet(out_channels, other_params)
+        self.blstm1 = nn.LSTM(
+            input_size=in_channels,
+            hidden_size=lstm_hidden,
+            bidirectional=True
+        )
+        self.blstm2 = nn.LSTM(
+            input_size=lstm_hidden * 2,
+            hidden_size=lstm_hidden,
+            bidirectional=True
+        )
+        self.out_projection = nn.Linear(
+            in_features=2 * lstm_hidden,
+            out_features=out_channels
+        )
+        self.resnet = ResidualNet(out_channels, hidden_dim)
 
     def forward(self, x):
         """
@@ -79,7 +95,7 @@ class BLSTMResConversionModel(nn.Module):
         # project to the output dimension
         initial_outs = self.out_projection(blstm2_out)
         residual = self.resnet(initial_outs)
-        final_outs = _  # define the final outputs here
+        final_outs = initial_outs + residual  # define the final outputs here
         return final_outs
 
 
@@ -89,29 +105,33 @@ class ResidualNet(nn.Module):
     for predicted Mel-spectrogram. It's widely accepted that
     this can help generate much more accurate Mel-spectrogram.
     """
-    def __init__(self, channels, other_params):
+
+    def __init__(self, channels, hidden_dim):
         """
         :param channels: equal to dimension of the Mel-spectrogram
-        :param other_params: parameters for the definition of your residual net
+        :param hidden_dim: parameters for the definition of your residual net
         """
         super(ResidualNet, self).__init__()
         self.channels = channels
         # define your module components below
         # e.g. self.dense_layer = nn.Linear(in_features=channels, out_features=channels)
+        self.linear1 = nn.Linear(channels, hidden_dim)
+        self.linear2 = nn.Linear(hidden_dim, channels)
 
     def forward(self, x):
         """
         :param x: input mel-spectrogram
         :return: output improved mel-spectrogram
         """
-        # define your inference process below
-        pass
+        x = F.relu(self.linear1(x))
+        x = self.linear2(x)
+        return x
 
 
 class BLSTMToManyConversionModel(nn.Module):
     """
     BLSTM based any-to-many VC model with SPKEmbedding Module.
-    You need to define your SPKEmbedding Module, and 
+    You need to define your SPKEmbedding Module, and
     might need to change necessary components in this Module.
     """
 
@@ -128,20 +148,32 @@ class BLSTMToManyConversionModel(nn.Module):
         self.num_spk = num_spk
         self.embd_dim = embd_dim
         self.lstm_hidden = lstm_hidden
-        self.spk_embed_net = SPKEmbedding(num_spk=num_spk,
-                                          embd_dim=embd_dim)
-        self.emb_proj1 = nn.Linear(in_features=embd_dim,
-                                   out_features=in_channels)
-        self.emb_proj2 = nn.Linear(in_features=embd_dim,
-                                   out_features=lstm_hidden * 2)
-        self.blstm1 = nn.LSTM(input_size=in_channels,
-                              hidden_size=lstm_hidden,
-                              bidirectional=True)
-        self.blstm2 = nn.LSTM(input_size=lstm_hidden * 2,
-                              hidden_size=lstm_hidden,
-                              bidirectional=True)
-        self.out_projection = nn.Linear(in_features=2 * lstm_hidden,
-                                        out_features=out_channels)
+        self.spk_embed_net = SPKEmbedding(
+            num_spk=num_spk,
+            embd_dim=embd_dim
+        )
+        self.emb_proj1 = nn.Linear(
+            in_features=embd_dim,
+            out_features=in_channels
+        )
+        self.emb_proj2 = nn.Linear(
+            in_features=embd_dim,
+            out_features=lstm_hidden * 2
+        )
+        self.blstm1 = nn.LSTM(
+            input_size=in_channels,
+            hidden_size=lstm_hidden,
+            bidirectional=True
+        )
+        self.blstm2 = nn.LSTM(
+            input_size=lstm_hidden * 2,
+            hidden_size=lstm_hidden,
+            bidirectional=True
+        )
+        self.out_projection = nn.Linear(
+            in_features=2 * lstm_hidden,
+            out_features=out_channels
+        )
 
     def forward(self, x, spk_inds):
         """
@@ -153,14 +185,14 @@ class BLSTMToManyConversionModel(nn.Module):
         """
         # look up speaker embedding
         spk_embds = self.spk_embed_net(spk_inds)
-        spk_embds =spk_embds.repeat(x.shape[0],1,1)
-        
+        spk_embds = spk_embds.repeat(x.shape[0], 1, 1)
+
         # add speaker embd to the inputs
-        blstm1_inputs = _ # give your implementation here
+        blstm1_inputs = self.emb_proj1(spk_embds) + x  # give your implementation here
         # pass to the 1st BLSTM layer
         blstm1_outs, _ = self.blstm1(blstm1_inputs)
         # add speaker embd to the outputs of 1st lstm
-        blstm2_inputs = _  # give your implementation here
+        blstm2_inputs = self.emb_proj2(spk_embds) + blstm1_outs  # give your implementation here
         # pass to the 2nd BLSTM layer
         blstm2_outs, _ = self.blstm2(blstm2_inputs)
         # project to the output dimension
@@ -176,6 +208,7 @@ class SPKEmbedding(nn.Module):
     Besides, you can also add more components, e.g., to generate speaker embedding
     according to the speaker's acoustic features such as Mel-spectrogram.
     """
+
     def __init__(self, num_spk, embd_dim):
         """
         Feel free to add parameters to define your own components
@@ -184,10 +217,8 @@ class SPKEmbedding(nn.Module):
         """
         super(SPKEmbedding, self).__init__()
         # define your module components below
-        # e.g. self.embedding_table = ...
-        #from zxt
-        
-        
+        self.embedding_table = nn.Embedding(num_spk, embd_dim)
+
     def forward(self, spk_inds):
         """
         Feel free to use other input features to extract your speaker embedding and
@@ -197,13 +228,14 @@ class SPKEmbedding(nn.Module):
         """
         # define your inference process below
         # e.g. return self.embedding_table(spk_inds)
-        pass
+        return self.embedding_table(spk_inds)
 
 
 class CustomToOneConversionModel(nn.Module):
     """
     define your custom any-to-one conversion model here
     """
+
     def __init__(self, in_channels, out_channels, other_params):
         """
         :param in_channels: input feature dimension (e.g. bnf's dim + F0 dim)
@@ -230,6 +262,7 @@ class Mel2Linear(nn.Module):
     Here defines a module to transform mel-spectrogram into linear-spectrogram
     in a neural way.
     """
+
     def __init__(self, in_channels, out_channels):
         """
         :param in_channels: input mel-spectrogram feature dimensions

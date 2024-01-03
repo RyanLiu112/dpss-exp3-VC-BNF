@@ -50,6 +50,9 @@ class Hparams:
     class BLSTMConversionModel:
         lstm_hidden = 256
 
+    class BLSTMResConversionModel:
+        hidden_dim = 256
+
     class BLSTMToManyConversionModel:
         lstm_hidden = 256
         spk_embd_dim = 64

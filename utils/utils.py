@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import random
 import numpy as np
 from scipy.interpolate import interp1d
 import librosa
@@ -8,6 +9,15 @@ from scipy.io import wavfile
 import parselmouth
 device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
 #device = 'cpu'
+
+def seed_everything(seed=42):
+  random.seed(seed)
+  np.random.seed(seed)
+  torch.manual_seed(seed)
+  if torch.cuda.is_available():
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
 def repeat_mat(mat, k):
   m, n = np.shape(mat)
   new_mat = np.zeros([m * k, n])

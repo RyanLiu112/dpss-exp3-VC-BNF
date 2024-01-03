@@ -1,13 +1,15 @@
 import os
+import time
 import torch
 import torch.optim as optim
 import argparse
+import numpy as np
 
 from torch.utils.data import DataLoader
 from models import BLSTMToManyConversionModel
 from datasets import VCDataset, collate_fn
 from config import Hparams
-from utils import draw_melspectrograms, masked_mse_loss
+from utils import draw_melspectrograms, masked_mse_loss, seed_everything
 
 # set up device
 device = torch.device("cuda:0" if torch.cuda.is_available() else 'cpu')
@@ -19,7 +21,11 @@ def main():
     parser.add_argument('--test_dir', type=str, help='test data save directory')
     parser.add_argument('--model_dir', type=str, help='model ckpt save directory')
     parser.add_argument('--data_dir', type=str, help='data directory containing the *_meta.csv')
+    parser.add_argument('--seed', type=int, default=42, help='random seed')
     args = parser.parse_args()
+
+    seed_everything(args.seed)
+
     train_meta_file = os.path.join(args.data_dir, 'train_meta.csv')
     dev_meta_file = os.path.join(args.data_dir, 'dev_meta.csv')
     test_meta_file = os.path.join(args.data_dir, 'test_meta.csv')
@@ -65,6 +71,8 @@ def main():
     model.to(device)
     optimizer = optim.Adam(model.parameters(), lr=hps.TrainToMany.learning_rate)
 
+    train_loss = []
+    valid_loss = []
     # start training
     for epoch in range(hps.TrainToMany.epochs):
         # training
@@ -89,6 +97,7 @@ def main():
             if idx % 1 == 0:  # print every batch
                 print('[%d, %5d] Training loss: %.5f' %
                       (epoch + 1, idx + 1, running_loss))
+                train_loss.append(running_loss)
                 running_loss = 0.0
         # save model parameters
         torch.save(model.state_dict(), os.path.join(args.model_dir, "bnf-vc-to-many-{}.pt".format(epoch)))
@@ -109,6 +118,7 @@ def main():
             dev_running_loss += dev_loss
         print('[%d] Validation loss: %.5f' %
               (epoch + 1, dev_running_loss / len(dev_dataloader)))
+        valid_loss.append(dev_running_loss / len(dev_dataloader))
 
         # test
         for test_batch in test_dataloader:
@@ -128,6 +138,10 @@ def main():
                 mel_lengths=test_batch['length'].numpy(), ids=test_batch['fid'],
                 prefix='groundtruth')
             break  # only test one batch of data
+    train_loss = np.array(train_loss)
+    valid_loss = np.array(valid_loss)
+    np.save('./many_train_loss.npy', train_loss)
+    np.save('./many_valid_loss.npy', valid_loss)
 
 
 if __name__ == '__main__':
