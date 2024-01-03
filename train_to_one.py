@@ -81,6 +81,7 @@ def main():
     valid_loss = []
     # start training
     for epoch in range(hps.TrainToOne.epochs):
+        torch.cuda.empty_cache()
         # training
         model.train()
         running_loss = 0.
@@ -95,6 +96,9 @@ def main():
             loss = masked_mse_loss(outputs.transpose(0, 1),
                                    target_mels.transpose(0, 1),
                                    lengths)
+            del outputs
+            del target_mels
+            del lengths
             loss.backward()
             optimizer.step()
 
@@ -104,6 +108,7 @@ def main():
                       (epoch + 1, idx + 1, running_loss))
                 train_loss.append(running_loss)
                 running_loss = 0.0
+        del running_loss
         # save model parameters
         torch.save(model.state_dict(), os.path.join(args.model_dir, "bnf-vc-to-one-{}.pt".format(epoch)))
         # validation
@@ -122,6 +127,7 @@ def main():
         print('[%d] Validation loss: %.5f' %
               (epoch + 1, dev_running_loss / len(dev_dataloader)))
         valid_loss.append(dev_running_loss / len(dev_dataloader))
+        del dev_running_loss
 
         # test
         for test_batch in test_dataloader:
