@@ -51,7 +51,7 @@ class Hparams:
         lstm_hidden = 256
 
     class BLSTMResConversionModel:
-        hidden_dim = 256
+        hidden_dim = 64
 
     class BLSTMToManyConversionModel:
         lstm_hidden = 256

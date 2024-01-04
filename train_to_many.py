@@ -106,16 +106,17 @@ def main():
         model.eval()
         dev_running_loss = 0.
         for dev_batch in dev_dataloader:
-            dev_inputs = torch.cat([dev_batch['bnf'], dev_batch['f0']], dim=2).to(device)
-            dev_spk_indices = dev_batch['spkid'].to(device)
-            dev_outputs = model(dev_inputs, dev_spk_indices)
-            dev_target_mels = dev_batch['mel'].to(device)
-            dev_lengths = dev_batch['length'].to(device)
-            # run backward pass
-            dev_loss = masked_mse_loss(dev_outputs.transpose(0, 1),
-                                       dev_target_mels.transpose(0, 1),
-                                       dev_lengths)
-            dev_running_loss += dev_loss
+            with torch.no_grad():
+                dev_inputs = torch.cat([dev_batch['bnf'], dev_batch['f0']], dim=2).to(device)
+                dev_spk_indices = dev_batch['spkid'].to(device)
+                dev_outputs = model(dev_inputs, dev_spk_indices)
+                dev_target_mels = dev_batch['mel'].to(device)
+                dev_lengths = dev_batch['length'].to(device)
+                # run backward pass
+                dev_loss = masked_mse_loss(dev_outputs.transpose(0, 1),
+                                           dev_target_mels.transpose(0, 1),
+                                           dev_lengths)
+                dev_running_loss += dev_loss
         print('[%d] Validation loss: %.5f' %
               (epoch + 1, dev_running_loss / len(dev_dataloader)))
         valid_loss.append(dev_running_loss / len(dev_dataloader))
@@ -123,20 +124,21 @@ def main():
         # test
         for test_batch in test_dataloader:
             print('Testing...')
-            test_inputs = torch.cat([test_batch['bnf'], test_batch['f0']], dim=2).to(device)
-            test_spk_indices = test_batch['spkid'].to(device)
-            test_outputs = model(test_inputs, test_spk_indices).transpose(0, 1)
-            test_target_mels = test_batch['mel'].transpose(0, 1)
-            
+            with torch.no_grad():
+                test_inputs = torch.cat([test_batch['bnf'], test_batch['f0']], dim=2).to(device)
+                test_spk_indices = test_batch['spkid'].to(device)
+                test_outputs = model(test_inputs, test_spk_indices).transpose(0, 1)
+                test_target_mels = test_batch['mel'].transpose(0, 1)
 
-            draw_melspectrograms(
-                args.test_dir, step=epoch, mel_batch=test_outputs.cpu().detach().numpy(),
-                mel_lengths=test_batch['length'].numpy(), ids=test_batch['fid'],
-                prefix='predicted')
-            draw_melspectrograms(
-                args.test_dir, step=epoch, mel_batch=test_target_mels.numpy(),
-                mel_lengths=test_batch['length'].numpy(), ids=test_batch['fid'],
-                prefix='groundtruth')
+
+                draw_melspectrograms(
+                    args.test_dir, step=epoch, mel_batch=test_outputs.cpu().detach().numpy(),
+                    mel_lengths=test_batch['length'].numpy(), ids=test_batch['fid'],
+                    prefix='predicted')
+                draw_melspectrograms(
+                    args.test_dir, step=epoch, mel_batch=test_target_mels.numpy(),
+                    mel_lengths=test_batch['length'].numpy(), ids=test_batch['fid'],
+                    prefix='groundtruth')
             break  # only test one batch of data
     train_loss = np.array(train_loss)
     valid_loss = np.array(valid_loss)

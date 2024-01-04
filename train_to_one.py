@@ -96,9 +96,6 @@ def main():
             loss = masked_mse_loss(outputs.transpose(0, 1),
                                    target_mels.transpose(0, 1),
                                    lengths)
-            del outputs
-            del target_mels
-            del lengths
             loss.backward()
             optimizer.step()
 
@@ -108,41 +105,44 @@ def main():
                       (epoch + 1, idx + 1, running_loss))
                 train_loss.append(running_loss)
                 running_loss = 0.0
-        del running_loss
+        del running_loss, loss, inputs, target_mels, lengths
         # save model parameters
         torch.save(model.state_dict(), os.path.join(args.model_dir, "bnf-vc-to-one-{}.pt".format(epoch)))
         # validation
         model.eval()
         dev_running_loss = 0.
         for dev_batch in dev_dataloader:
-            dev_inputs = torch.cat([dev_batch['bnf'], dev_batch['f0']], dim=2).to(device)
-            dev_outputs = model(dev_inputs)
-            dev_target_mels = dev_batch['mel'].to(device)
-            dev_lengths = dev_batch['length'].to(device)
-            # run backward pass
-            dev_loss = masked_mse_loss(dev_outputs.transpose(0, 1),
-                                       dev_target_mels.transpose(0, 1),
-                                       dev_lengths)
-            dev_running_loss += dev_loss
+            with torch.no_grad():
+                dev_inputs = torch.cat([dev_batch['bnf'], dev_batch['f0']], dim=2).to(device)
+                dev_outputs = model(dev_inputs)
+                dev_target_mels = dev_batch['mel'].to(device)
+                dev_lengths = dev_batch['length'].to(device)
+                # run backward pass
+                dev_loss = masked_mse_loss(dev_outputs.transpose(0, 1),
+                                           dev_target_mels.transpose(0, 1),
+                                           dev_lengths)
+                dev_running_loss += dev_loss
         print('[%d] Validation loss: %.5f' %
               (epoch + 1, dev_running_loss / len(dev_dataloader)))
         valid_loss.append(dev_running_loss / len(dev_dataloader))
-        del dev_running_loss
+        del dev_running_loss, dev_loss, dev_inputs, dev_outputs, dev_target_mels, dev_lengths
 
         # test
         for test_batch in test_dataloader:
-            test_inputs = torch.cat([test_batch['bnf'], test_batch['f0']], dim=2).to(device)
-            test_outputs = model(test_inputs).transpose(0, 1)
-            test_target_mels = test_batch['mel'].transpose(0, 1)
+            with torch.no_grad():
+                test_inputs = torch.cat([test_batch['bnf'], test_batch['f0']], dim=2).to(device)
+                test_outputs = model(test_inputs).transpose(0, 1)
+                test_target_mels = test_batch['mel'].transpose(0, 1)
 
-            draw_melspectrograms(
-                args.test_dir, step=epoch, mel_batch=test_outputs.cpu().detach().numpy(),
-                mel_lengths=test_batch['length'].numpy(), ids=test_batch['fid'],
-                prefix='predicted')
-            draw_melspectrograms(
-                args.test_dir, step=epoch, mel_batch=test_target_mels.numpy(),
-                mel_lengths=test_batch['length'].numpy(), ids=test_batch['fid'],
-                prefix='groundtruth')
+                draw_melspectrograms(
+                    args.test_dir, step=epoch, mel_batch=test_outputs.cpu().detach().numpy(),
+                    mel_lengths=test_batch['length'].numpy(), ids=test_batch['fid'],
+                    prefix='predicted')
+                draw_melspectrograms(
+                    args.test_dir, step=epoch, mel_batch=test_target_mels.numpy(),
+                    mel_lengths=test_batch['length'].numpy(), ids=test_batch['fid'],
+                    prefix='groundtruth')
+            del test_inputs, test_outputs, test_target_mels
             break  # only test one batch of data
     train_loss = np.array(train_loss)
     valid_loss = np.array(valid_loss)
