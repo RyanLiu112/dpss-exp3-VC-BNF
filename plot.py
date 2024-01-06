@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -12,6 +13,8 @@ plt.figure(figsize=(6, 4))
 plt.plot(train)
 plt.xlabel('Step')
 plt.ylabel('Loss')
-plt.legend()
 plt.tight_layout()
 plt.savefig(f'./{model_type}_train_loss.png')
+
+print(len(valid))
+print(valid[-1])
