@@ -16,5 +16,8 @@ plt.ylabel('Loss')
 plt.tight_layout()
 plt.savefig(f'./{model_type}_train_loss.png')
 
+print(len(train))
+assert len(train) % 60 == 0
+print(torch.from_numpy(train[-60:]).cpu().mean().numpy())
 print(len(valid))
-print(valid[-1])
+print(valid[-1].cpu().numpy())

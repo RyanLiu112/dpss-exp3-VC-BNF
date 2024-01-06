@@ -63,20 +63,26 @@ def main():
     predicted_mels = model(torch.tensor(vc_inputs).to(torch.float32))
     predicted_mels = np.squeeze(predicted_mels.detach().numpy(), axis=1)
 
+    # 计算MSE
+    mse = np.mean((predicted_mels - mel_spec) ** 2)
+    print(f"MSE: {mse}")
+
     # 5. synthesize wav
-    synthesized_wav = inv_preemphasize(inv_mel_spectrogram(predicted_mels.T))
-    resynthesized_wav = inv_preemphasize(inv_mel_spectrogram(mel_spec.T))
-    ckpt_name = args.ckpt.split('/')[-1].split('.')[0]
-    wav_name = args.src_wav.split('/')[-1].split('.')[0]
-    if not os.path.isdir(args.save_dir):
-        os.makedirs(args.save_dir)
-    if 'res' in args.ckpt:
-        save_wav(synthesized_wav, os.path.join(args.save_dir, '{}-{}-res-converted.wav'.format(wav_name, ckpt_name)))
-        save_wav(resynthesized_wav, os.path.join(args.save_dir, '{}-{}-res-src-resyn.wav'.format(wav_name, ckpt_name)))
-    else:
-        save_wav(synthesized_wav, os.path.join(args.save_dir, '{}-{}-converted.wav'.format(wav_name, ckpt_name)))
-        save_wav(resynthesized_wav, os.path.join(args.save_dir, '{}-{}-src-resyn.wav'.format(wav_name, ckpt_name)))
-    return
+    if args.save_dir:
+        synthesized_wav = inv_preemphasize(inv_mel_spectrogram(predicted_mels.T))
+        resynthesized_wav = inv_preemphasize(inv_mel_spectrogram(mel_spec.T))
+        ckpt_name = args.ckpt.split('/')[-1].split('.')[0]
+        wav_name = args.src_wav.split('/')[-1].split('.')[0]
+
+        if not os.path.isdir(args.save_dir):
+            os.makedirs(args.save_dir)
+        if 'res' in args.ckpt:
+            save_wav(synthesized_wav, os.path.join(args.save_dir, '{}-{}-res-converted.wav'.format(wav_name, ckpt_name)))
+            save_wav(resynthesized_wav, os.path.join(args.save_dir, '{}-{}-res-src-resyn.wav'.format(wav_name, ckpt_name)))
+        else:
+            save_wav(synthesized_wav, os.path.join(args.save_dir, '{}-{}-converted.wav'.format(wav_name, ckpt_name)))
+            save_wav(resynthesized_wav, os.path.join(args.save_dir, '{}-{}-src-resyn.wav'.format(wav_name, ckpt_name)))
+        return
 
 
 if __name__ == '__main__':
